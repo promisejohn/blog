@@ -68,8 +68,8 @@ theme: jacman
 ## Docs: http://hexo.io/docs/deployment.html
 deploy:
   type: git
-  repo: ssh://git@github.com/promisejohn/promisejohn.github.io
+  repo: ssh://github/promisejohn/promisejohn.github.io
   branch: master
-  message: update blog data
+  message: update blog data via Hexo deploy
 
 
