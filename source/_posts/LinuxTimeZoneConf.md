@@ -1,5 +1,5 @@
 layout: blog
-title: "LinuxTimeZoneConf"
+title: "Linux时区设置"
 date: 2015-04-15 15:13:59
 tags: [linux]
 categories: [linux]
