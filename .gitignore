@@ -28,3 +28,4 @@ node_modules
 
 # hexo generated files, send to github.io pages
 public
+.deploy_git
