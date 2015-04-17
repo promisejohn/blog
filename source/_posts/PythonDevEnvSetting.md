@@ -1,11 +1,11 @@
-title: "Web开发环境搭建"
+title: "Python开发环境搭建"
 date: 2015-04-15 16:03:04
-tags: [dev]
-categories: [dev]
+tags: [python, 开发]
+categories: [开发]
 
 ---
 
-### Python setting
+### Python开发环境搭建
 
 用豆瓣的源给pip和easy_install加速，~/.bashrc：
 
@@ -101,8 +101,3 @@ SETUPTOOLS_VERSION/PIP_VERSION # install the specified version of setuptools and
 [python1]: http://seisman.info/python-pyenv.html "Python多版本共存之pyenv"
 [python2]: http://www.cnblogs.com/npumenglei/p/3719412.html "用pyenv 和 virtualenv 搭建单机多版本python 虚拟开发环境"
 [python3]: https://github.com/yyuu/pyenv-virtualenv "pyenv-virtualenv Official site"
-
-### NodeJS setting
-
-
-### GCC setting
