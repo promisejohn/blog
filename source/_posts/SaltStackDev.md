@@ -1,8 +1,8 @@
 ---
 title: "SaltStack开发环境搭建"
 date: 2015-04-16 11:08:18
-tags: [saltstack]
-categories: [saltstack]
+tags: [saltstack,dev]
+categories: [Tech]
 ---
 
 ### 安装及准备

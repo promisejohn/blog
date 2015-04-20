@@ -1,8 +1,8 @@
 ---
 title: "Ruby开发环境搭建"
 date: 2015-04-17 10:48:49
-tags: [ruby, 开发]
-categories: [开发]
+tags: [ruby, dev]
+categories: [Tech]
 ---
 
 ### Ruby开发环境搭建

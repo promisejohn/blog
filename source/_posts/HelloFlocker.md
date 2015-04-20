@@ -1,8 +1,8 @@
 ---
 title: "Hello Flocker"
 date: 2015-04-16 23:56:04
-tags: [flocker, docker, vagrant]
-categories: [虚拟化]
+tags: [flocker, docker, vagrant, 虚拟化]
+categories: [Tech]
 
 ---
 

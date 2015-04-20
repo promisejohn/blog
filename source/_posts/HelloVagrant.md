@@ -1,8 +1,8 @@
 ---
 title: "Hello Vagrant"
 date: 2015-04-17 10:22:06
-tags: [vagrant]
-categories: [虚拟化]
+tags: [vagrant, 虚拟化]
+categories: [Tech]
 ---
 
 ### Vagrant部署

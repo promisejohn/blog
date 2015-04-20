@@ -1,7 +1,7 @@
 title: "Python开发环境搭建"
 date: 2015-04-15 16:03:04
-tags: [python, 开发]
-categories: [开发]
+tags: [python, dev]
+categories: [Tech]
 
 ---
 
