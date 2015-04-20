@@ -1,5 +1,5 @@
 ---
-title: Hello World
+title: Hello Hexo
 tags: [hexo]
 categories: [Tech]
 ---
