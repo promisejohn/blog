@@ -1,8 +1,12 @@
 ---
 title: "Openstack安装部署"
-tags: [Tech]
+date: 2015-05-07 15:12:56
+tags: [openstack,nova,neutron,cinder,glance,ceilometer,swift]
 categories: [Tech]
 ---
+
+
+
 
 ## 参考架构及部署规划
 ![参考架构](http://docs.openstack.org/icehouse/install-guide/install/yum/content/figures/1/a/common/figures/openstack_havana_conceptual_arch.png)
@@ -19,12 +23,13 @@ osnetwork | 10.0.100.146 | 192.168.182.151 | ML2, OVS, L2 Agent, L3 Agent, DHCP 
 oscompute1 | 10.0.100.147 | 192.168.182.152 | nova-compute
 oscompute2 | 10.0.100.148 | 192.168.182.153 | nova-compute
 oskeystone  | 10.0.100.149 | 192.168.182.154 | qpid/rabbitmq, keystone, mysql， memcached
+osmeter  | 10.0.100.150 | 192.168.182.155 | ceilometer, mongodb
 osswift0 | 10.0.100.139 | 192.168.182.144 | swift0, swift-proxy-server
 osswift1 | 10.0.100.140 | 192.168.182.145 | swift1
 osswift2 | 10.0.100.141 | 192.168.182.146 | swift2
 osceph0 | 10.0.100.142 | 192.168.182.147 | ceph0
-osceph1 | 10.0.100.143 | 192.168.182.148 | ceph1
-osceph2 | 10.0.100.144 | 192.168.182.149 | ceph2
+osceph1 | 10.0.100.143 | 192.168.182.148 | ceph1 # 暂时不用
+osceph2 | 10.0.100.144 | 192.168.182.149 | ceph2 # 暂时不用
 
 
 ![参考部署架构](http://docs.openstack.org/icehouse/install-guide/install/yum/content/figures/1/figures/installguide_arch-neutron.png)
@@ -132,7 +137,7 @@ $ TZ='Asia/Shanghai'; export TZ
 提前准备好安装过程中用到的密码：
 
 ```bash
-for i in KEYSTONE GLANCE NOVA CINDER NEUTRON HEAT CEILOMETER TROVE; do echo $i"_DBPASS" `openssl rand -hex 10`; echo $i"_PASS" `openssl rand -hex 10`; done
+for i in KEYSTONE GLANCE NOVA CINDER NEUTRON HEAT CEILOMETER; do echo $i"_DBPASS" `openssl rand -hex 10`; echo $i"_PASS" `openssl rand -hex 10`; done
 for i in MYSQL_PASS QPID_PASS DEMO_PASS ADMIN_PASS DASH_DBPASS METADATA_SECRET SWIFT_PASS; do echo $i `openssl rand -hex 10`;done;
 ```
 记录好生成的输出：
@@ -152,8 +157,6 @@ HEAT_DBPASS 51eb27f53983633f3337
 HEAT_PASS 3817bfface1b24918d4b
 CEILOMETER_DBPASS 072aac393486f9b29235
 CEILOMETER_PASS eb8ed86ef2178168c458
-TROVE_DBPASS 4bf36df17323ff60ac43
-TROVE_PASS 1342204826b34e479cb5
 MYSQL_PASS a904019ba8cc0b14bef2
 QPID_PASS 232a62982a3bcdc86cba
 DEMO_PASS c3f7871eaa28ca146d09
@@ -353,7 +356,7 @@ index-url = http://pypi.douban.com/simple
 批量安装Clients：
 
 ```bash
-$ for i in cinder nova trove keystone glance neutron swift heat ceilometer; do pip install  "python-"$i"client";done;
+$ for i in cinder nova keystone glance neutron swift heat ceilometer; do pip install  "python-"$i"client";done;
 ```
 
 ## Images Service: Glance
@@ -1728,15 +1731,226 @@ $ heat stack-list
 ```
 
 
-## Cinder with Ceph
-
-
 
 ## Ceilometer
+监控CPU、网络等指标，通过REST API访问。
+* ceilometer-agent-compute: 部署在每个计算节点，目前主要针对计算节点采集信息；
+* ceilometer-agent-central: 非计算节点信息采集；
+* ceilometer-collector: 采集信息汇聚。
+* ceilometer-alarm-notifier: 告警设置。
+* ceilometer-api: 接受查询请求。
+* 后端存储，比如mongodb。
+
+### 在osmeter部署Ceilmeter Service：
 
 
+```bash
+$ yum install -y openstack-ceilometer-api openstack-ceilometer-collector \
+  openstack-ceilometer-notification openstack-ceilometer-central openstack-ceilometer-alarm python-ceilometerclient
+```
+配置MongoDB：
 
-## Trove
+```bash
+$ yum install -y mongodb-server mongodb
+$ vim /etc/mongodb.conf # edit the bind_ip to osmeter internal ip:10.0.100.150
+$ service mongod start
+$ chkconfig mongod on
+$ mongo --host 10.0.100.150 --eval '
+db = db.getSiblingDB("ceilometer");
+db.addUser({user: "ceilometer",
+            pwd: "072aac393486f9b29235",
+            roles: [ "readWrite", "dbAdmin" ]})'
+```
+配置Ceilmeter服务：
+
+```bash
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  database connection mongodb://ceilometer:072aac393486f9b29235@10.0.100.150:27017/ceilometer
+$ CEILOMETER_TOKEN=$(openssl rand -hex 10)
+$ echo $CEILOMETER_TOKEN
+$ openstack-config --set /etc/ceilometer/ceilometer.conf publisher metering_secret $CEILOMETER_TOKEN
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  DEFAULT rpc_backend ceilometer.openstack.common.rpc.impl_qpid
+$ openstack-config --set /etc/ceilometer/ceilometer.conf DEFAULT qpid_hostname 10.0.100.149
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  DEFAULT auth_strategy keystone
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  keystone_authtoken auth_host 10.0.100.149
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  keystone_authtoken admin_user ceilometer
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  keystone_authtoken admin_tenant_name service
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  keystone_authtoken auth_protocol http
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  keystone_authtoken auth_uri http://10.0.100.149:5000
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  keystone_authtoken admin_password eb8ed86ef2178168c458
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  service_credentials os_auth_url http://10.0.100.149:5000/v2.0
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  service_credentials os_username ceilometer
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  service_credentials os_tenant_name service
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  service_credentials os_password eb8ed86ef2178168c458
+```
+注册Keystone服务：
+
+```bash
+$ keystone service-create --name=ceilometer --type=metering \
+  --description="Telemetry"
+$ keystone endpoint-create \
+  --service-id=$(keystone service-list | awk '/ metering / {print $2}') \
+  --publicurl=http://192.168.182.155:8777 \
+  --internalurl=http://10.0.100.150:8777 \
+  --adminurl=http://10.0.100.150:8777
+$ keystone user-create --name=ceilometer --pass=eb8ed86ef2178168c458 --email=ceilometer@tecstack.org
+$ keystone user-role-add --user=ceilometer --tenant=service --role=admin
+```
+启动服务：
+
+```bash
+$ for svc in openstack-ceilometer-{api,notification,central,collector,alarm-evaluator,alarm-notifier}; do service $svc start; chkconfig $svc on; done;
+```
+
+### 给计算节点部署Agent：
+在oscompute1和oscompute2上安装：
+
+```bash
+$ yum install -y openstack-ceilometer-compute python-ceilometerclient python-pecan
+$ 
+```
+编辑`/etc/nova/nova.conf`:
+
+```bash
+$ openstack-config --set /etc/nova/nova.conf DEFAULT \
+  instance_usage_audit True
+$ openstack-config --set /etc/nova/nova.conf DEFAULT \
+  instance_usage_audit_period hour
+$ openstack-config --set /etc/nova/nova.conf DEFAULT \
+  notify_on_state_change vm_and_task_state
+```
+多值的参数，直接修改文件如下：
+
+```
+[DEFAULT]
+...
+notification_driver = nova.openstack.common.notifier.rpc_notifier
+notification_driver = ceilometer.compute.nova_notifier
+... # qpid 和qpid_hostname之前已经配置过，这里采用一样
+```
+编辑`/etc/ceilometer/ceilometer.conf`:
+
+```bash
+$ openstack-config --set /etc/ceilometer/ceilometer.conf publisher \
+  metering_secret 711e1a83f278a83de1f8 # 在ceilometer上用openssl生成的
+$ openstack-config --set /etc/ceilometer/ceilometer.conf DEFAULT rpc_backend ceilometer.openstack.common.rpc.impl_qpid
+# openstack-config --set /etc/ceilometer/ceilometer.conf DEFAULT qpid_hostname 10.0.100.149
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  keystone_authtoken auth_host 10.0.100.149
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  keystone_authtoken admin_user ceilometer
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  keystone_authtoken admin_tenant_name service
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  keystone_authtoken auth_protocol http
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  keystone_authtoken admin_password eb8ed86ef2178168c458
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  service_credentials os_username ceilometer
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  service_credentials os_tenant_name service
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  service_credentials os_password eb8ed86ef2178168c458
+$ openstack-config --set /etc/ceilometer/ceilometer.conf \
+  service_credentials os_auth_url http://10.0.100.149:5000/v2.0
+```
+
+重启服务：
+
+```bash
+$ service openstack-nova-compute restart
+$ service openstack-ceilometer-compute start
+$ chkconfig openstack-ceilometer-compute on
+```
+
+
+### 给Glance、Cinder、Swift部署Agent：
+
+在oscontroller上编辑`/etc/glance/glance-api.conf`，并重启服务:
+
+```bash
+$ openstack-config --set /etc/glance/glance-api.conf DEFAULT notification_driver messaging
+$ openstack-config --set /etc/glance/glance-api.conf DEFAULT rpc_backend qpid
+$ openstack-config --set /etc/glance/glance-api.conf DEFAULT qpid_hostname 10.0.100.149
+$ service openstack-glance-api restart
+$ service openstack-glance-registry restart
+```
+
+在oscontroller和osceph0上编辑`/etc/cinder/cinder.conf`，并重启服务：
+
+```bash
+$ openstack-config --set /etc/cinder/cinder.conf DEFAULT control_exchange cinder
+$ openstack-config --set /etc/cinder/cinder.conf DEFAULT notification_driver cinder.openstack.common.notifier.rpc_notifier
+$ service openstack-cinder-api restart # 在oscontoller上
+$ service openstack-cinder-scheduler restart # 在oscontroller上
+$ service openstack-cinder-volume restart # 在osceph0上
+```
+
+在osswift0上安装：
+
+```bash
+$ yum install -y python-ceilometer
+```
+
+另，ceilometer需要`ResellerAdmin`角色来获取数据：
+
+```bash
+$ keystone role-create --name=ResellerAdmin
+$ keystone user-role-add --tenant service --user ceilometer \
+      --role $(keystone role-list | awk '/ ResellerAdmin / {print $2}')
+```
+
+在osswift0上修改`/etc/swift/proxy-server.conf`:
+
+```
+...
+[filter:ceilometer]
+use = egg:ceilometer#swift
+...
+[pipeline:main]
+pipeline = healthcheck cache authtoken keystoneauth ceilometer proxy-server
+...
+```
+重启`openstack-swift-proxy `服务:
+
+```bash
+$ service openstack-swift-proxy restart
+```
+
+### 检验ceilometer效果
+
+```bash
+$ ceilometer meter-list
+$ glance image-download "cirros-0.3.2-x86_64" > cirros.img # 下载一个镜像
+$ ceilometer meter-list
+$ ceilometer statistics -m image.download -p 60
+```
+
+如果遇到采集指标不齐问题，可以检查MQ上的消息队列，可以用`qpid-tools`工具（其他MQ对应也有其他工具）：
+
+```bash
+$ yum install -y qpid-tools
+$ qpid-tool 10.0.100.149
+qpid > list
+qpid > list queue/exchange
+qpid > show ID_xxx
+```
+
+## 总结
+
+Openstack主要的组件部署不复杂，文档目前也已经比较成熟，只不过涉及到linux和python dev相关内容较多，细节容易出错，多动动手基本也可以很快熟悉起来。但如果要深入内部，还得从log、运行原理等切入，直至跟进组件社区开发状态和进展，非一日之功。
 
 
 参考：
