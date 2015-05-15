@@ -1,6 +1,6 @@
 ---
 title: "iSCSIwithTgtd"
-tags: [iscsi,tgtd]
+tags: [iscsi,tgtd,gfs]
 categories: [Tech]
 ---
 
@@ -74,6 +74,7 @@ $ iscsiadm -m node -T iqn.2015-05-04.org.tecstack.storage.tg1 --logout #登出ta
 $ fdisk -l # 登出后设备移除
 $ iscsiadm -m node -o delete -T iqn.2015-05-04.org.tecstack.storage.tg1 # 删除target
 $ ls -lh /var/lib/iscsi/nodes/
+$ iscsiadm -m node -T iqn.2015-05-04.org.tecstack.storage.tg1 -p 192.168.182.156 -- op update -n node.startup -v automatic # 自动login
 ```
 
 当login到target之后，就可以使用，比如通过LVM：
@@ -99,13 +100,83 @@ $ df -h
 $ tune2fs -l /dev/sdc
 ```
 
+### GFS2测试
+
+#### 创建和挂载iscsi块存储
+
+在target端创建LUN
+
+```bash
+$ dd if=/dev/zero of=/opt/tgtstorage/disk_gfs.img bs=1M count=5120
+$ tgtadm --lld iscsi --op new --mode logicalunit --tid 1 --lun 3 --backing-store /opt/tgtstorage/disk_gfs.img
+$ tgtadm --lld iscsi --mode target --op bind --tid 1 --initiator-address=192.168.182.157
+$ tgtadm --lld iscsi --mode target --op bind --tid 1 --initiator-address=192.168.182.158
+$ tgt-admin --show
+```
+
+在client1和client2上挂载块设备：
+
+```bash
+$ iscsiadm --mode discovery --type sendtargets --portal 192.168.182.156
+$ iscsiadm -m node
+$ iscsiadm -m node -T iqn.2015-05-04.org.tecstack.storage.tg1 --login
+$ fdisk -l
+```
+
+#### 使用luci配置集群：
+
+在target端配置：
+
+```bash
+$ yum -y install luci
+$ service luci start
+```
+
+在client1和client2上配置：
+
+```bash
+$ yum install -y ricci
+$ service ricci start
+$ passwd ricci # 123456，节点密码
+```
+
+通过访问target的https（默认端口8084，账号同Linux本地root账号），创建集群，新增节点，选择下载包，勾选启用共享文件系统。管理工具会自动帮助安装：`cman rgmanager lvm2-cluster sg3_utils gfs2-utils`，并启动相关服务。
+
+#### 在一台集群节点上创建LVM逻辑卷，格式化为GFS文件系统
+
+识别scsi和块设备的对应关系：
+
+```bash
+$ ls -l /dev/disk/by-path/*tecstack*
+$ scsi_id -gu /dev/sdb
+```
+
+在client1上执行：
+
+```bash
+$ pvcreate /dev/sdb
+$ vgcreate gfstest /dev/sdb
+$ lvcreate -l 1024 -n gfsdisk0 gfstest
+$ mkfs.gfs2 -j2 -p lock_dlm -t gfstest:gfs2 /dev/gfstest/gfsdisk0
+```
+
+#### 在两台集群节点上同时挂载GFS文件系统
+
+在client1和client2上执行：
+
+```bash
+$ mkdir /mnt/gfstest
+$ mount /dev/gfstest/gfsdisk0 /mnt/gfstest
+```
 
 参考：
 
 1. [creating and managing iscsi targets][iscsi0]
 2. [tgtadm man page][iscsi1]
 3. [iscsi使用案例][iscsi2]
+4. [GFS配置][iscsi3]
 
 [iscsi0]: http://blog.delouw.ch/2013/07/07/creating-and-managing-iscsi-targets/ "creating and managing iscsi targets"
 [iscsi1]: http://stgt.sourceforge.net/manpages/tgtadm.8.html "tgtadm official man page"
 [iscsi2]: http://linux.vbird.org/linux_server/0460iscsi.php "iscsi使用案例"
+[iscsi3]: https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/5/html/Global_File_System/s1-config-tasks.html "GFS配置"
