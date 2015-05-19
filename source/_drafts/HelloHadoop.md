@@ -56,10 +56,137 @@ $ vim /etc/yum.repo.d/ambari.repo # 修改baseurl指向本地镜像
 
 ## HDFS
 
+HDFS由NameNode、SNameNode和DataNode组成，HA的时候还有另一个NameNode（StandBy）。SNameNode专门从NameNode获取FSImage和Edits，为NameNode合并生成新的FSImage。
+
+HDFS有个超级用户，就是启动NameNode的那个linux账号。
+### 基本Shell操作
+
 ```bash
-$ su -s /bin/sh -c 'hadoop fs -ls /' hdfs
-$ 
+$ ps -elf | grep NameNode #看看哪个账号启动了NameNode，那个账号就是超级用户
+$ su -s /bin/sh -c 'hadoop fs -ls /' hdfs #使用超级账号执行命令
+$ su hdfs #切换到超级账号
+$ useradd -G hdfs promise
+$ hdfs dfs -mkdir /user/promise
+$ hdfs dfs -chown promise:hdfs /user/promise
+$ hdfs dfs -ls /user/
+$ hdfs dfs -mkdir -p /user/promise/dev/hello
+$ hdfs dfs -chmod -R 777 /user/promise/dev
+$ hdfs dfs -ls /user/promise/dev/
+$ echo “helloworld” > hello.txt
+$ hdfs dfs -put hello.txt /user/promise/helloworld.txt
+$ hdfs dfs -put - hdfs://192.168.182.119/user/promise/test.txt # 从stdin输入，Ctrl-D结束
+$ hdfs dfs -cat hdfs://192.168.182.119/user/promise/test.txt
+$ hdfs dfs -cat /user/promise/helloworld.txt
+$ hdfs dfs -get /user/promise/helloworld.txt hello2.txt
+$ hdfs dfs -tail -f /user/promise/helloworld.txt # 查看追加的文件写入
+$ hdfs dfs -appendToFile - /user/promise/helloworld.txt
 ```
+
+### webhdfs操作
+
+启用了webhdfs之后（`hdfs-site`中`dfs.webhdfs.enabled=true`），可以通过HTTP方式访问HDFS：
+
+```bash
+$ curl -i "http://192.168.182.119:50070/webhdfs/v1/user/promise/?op=LISTSTATUS"
+$ curl -i -L "http://192.168.182.119:50070/webhdfs/v1/user/promise/helloworld.txt?op=OPEN" # 通过重定向到DataNode获取文件
+$ curl -i -X PUT "http://192.168.182.119:50070/webhdfs/v1/user/promise/hello?user.name=promise&op=MKDIRS"
+```
+通过HTTP方式创建和追加文件都需要通过2阶段实现：先在NameNode上创建，获得DataNode URI后再向URI上传文件。
+
+```bash
+$ curl -i -X PUT "http://192.168.182.119:50070/webhdfs/v1/user/promise/hello/hi.txt?op=CREATE"
+$ curl -i -X PUT -T hi.txt "http://192.168.182.119:50075/webhdfs/v1/user/promise/hello/hi.txt?user.name=promise&op=CREATE&namenoderpcaddress=192.168.182.119:8020&overwrite=false" # 需要声明账号
+```
+
+### 查看离线的FSImage和Edits：
+
+```bash
+$ hdfs oiv -p XML -i /hadoop/hdfs/namenode/current/fsimage_0000000000000018887 -o fsimage.xml # 生成XML格式
+$ hdfs oiv  -i /hadoop/hdfs/namenode/current/fsimage_0000000000000018887 # 在线查看形式
+$ hdfs dfs -ls webhdfs://127.0.0.1:5978/
+$ hdfs oev -i /hadoop/hdfs/namenode/current/edits_0000000000000000001-0000000000000005150 -o edits.xml # 查看edits
+```
+
+### 使用Java API
+
+Java在大型软件系统开发中有利于更清晰的架构设计和团队分工，而且有大量的第三方优质框架可用；可惜在命令里写HelloWorld很啰嗦，方便起见，直接用maven生成基本文件结构。
+
+```bash
+$ export PATH=$PATH:/opt/apache-maven-3.3.3/bin/
+$ export JAVA_HOME=/usr/jdk64/jdk1.7.0_67/
+$ export MAVEN_OPTS="-Xms256m -Xmx512m"
+$ mkdir ~/dev && cd $_
+$ mvn archetype:generate -DgroupId=org.tecstack -DartifactId=hellohdfs -DarchetypeArtifactId=maven-archetype-quickstart -DinteractiveMode=false
+$ cd hellohdfs
+$ vim ./src/main/java/org/tecstack/App.java
+```
+
+```java
+package org.tecstack;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+
+/**
+ * Hello HDFS
+ *
+ */
+public class App
+{
+    public static void main( String[] args )
+    {
+        try {
+                Configuration conf=new Configuration();
+                FileSystem hdfs=FileSystem.get(conf);
+                Path dst =new Path("/user/promise/helloworld.txt");
+                FileStatus files[]=hdfs.listStatus(dst);
+                for(FileStatus file:files) {
+                    System.out.println(file.getPath());
+                }
+        } catch (Exception e) {
+                e.printStackTrace();
+        }
+    }
+}
+```
+
+在`pom.xml`增加hadoop依赖包:
+
+```xml
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.tecstack</groupId>
+  <artifactId>hellohdfs</artifactId>
+  <packaging>jar</packaging>
+  <version>1.0-SNAPSHOT</version>
+  <name>hellohdfs</name>
+  <url>http://maven.apache.org</url>
+  <dependencies>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-common</artifactId>
+      <version>2.2.0</version>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>3.8.1</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>
+```
+
+打包运行：
+
+```bash
+$ mvn package
+$ mvn exec:java -Dexec.mainClass="org.tecstack.App"
+```
+
 
 
 ## Zookeeper
@@ -79,6 +206,8 @@ $
 ## 参考
 
 1. [Ambari Official Docs][hadoop0]
+2. [HDFS Official Doc][hadoop1]
 
 
 [hadoop0]:http://docs.hortonworks.com/HDPDocuments/Ambari-2.0.0.0/Ambari_Doc_Suite/ADS_v200.html "Ambari Official Docs"
+[hadoop1]:http://hadoop.apache.org/docs/stable2/hadoop-project-dist/hadoop-common/FileSystemShell.html "HDFS Official Doc"
