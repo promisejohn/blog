@@ -7,7 +7,7 @@ categories: [Tech]
 
 # Docker概述
 
-Docker是基于Go语言开发的容器管理工具，而且抽象级别比lxc这些管理工具高，目前官方默认通过libcontainer管理容器。lxc是一些kernel patch（namespaces）和userspace tool（cgroup）的集合，通过cgroup这个用户态管理工具实现对隔离资源的管理。Docker相比LXC增加了镜像服务（通过UnionFS和DeviceMapper），同时简化了操作复杂度，可以很方便实现应用分发部署，甚至是扩容。目前也有一些周边管理工具（Fig、Flocker、weaver）在创新，在docker基础上实现更多实用功能，如迁移，流程编排，网络管理等。跟openstack相比，docker更年轻，也更轻量级，但两者在某些场景下又可以很好结合起来，比如通过docker将openstack的管理节点实现高可用、可扩展。
+Docker是基于Go语言开发的容器管理工具，而且抽象级别比lxc这些管理工具高，目前官方默认通过libcontainer管理容器。lxc是一些kernel patch（namespaces）和userspace tool（cgroup）的集合，通过cgroup这个用户态管理工具实现对隔离资源的管理。Docker相比LXC增加了镜像服务（通过UnionFS和DeviceMapper），同时简化了操作复杂度，可以很方便实现应用分发部署，甚至是扩容。目前也有一些周边管理工具（Compose、Flocker、weaver）在创新，在docker基础上实现更多实用功能，如迁移，流程编排，网络管理等。跟openstack相比，docker更年轻，也更轻量级，但两者在某些场景下又可以很好结合起来，比如通过docker将openstack的管理节点实现高可用、可扩展。
 
 docker的部署在发行版上比较简单，但对内核版本有不同要求，比如在centos6.5上要求内核版本至少2.6.32-431。
 
@@ -128,6 +128,74 @@ $ docker run -d -p 5000:5000 \
 $ docker --registry-mirror=http://10.101.29.26 -d
 ```
 
+## Docker Compose
+
+Docker Compose可以方便地实现应用的组合。
+
+```bash
+$ pip install docker-compose
+$ mkdir compose && cd $_
+```
+
+增加`app.py`：
+
+```python
+from flask import Flask
+from redis import Redis
+import os
+app = Flask(__name__)
+redis = Redis(host='redis', port=6379)
+
+@app.route('/')
+def hello():
+    redis.incr('hits')
+    return 'Hello World! I have been seen %s times.' % redis.get('hits')
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", debug=True)
+```
+
+增加`requirements.txt`：
+
+```
+flask
+redis
+```
+
+增加`Dockerfile`：
+
+```
+FROM python:2.7
+ADD . /code
+WORKDIR /code
+RUN pip install -r requirements.txt
+```
+
+增加`docker-compose.yml`：
+
+```
+web:
+  build: .
+  command: python app.py
+  ports:
+   - "5000:5000"
+  volumes:
+   - .:/code
+  links:
+   - redis
+redis:
+  image: redis
+```
+
+启动并管理服务：
+
+```bash
+$ docker-compose up -d
+$ docker-compose ps
+$ docker-compose run web env
+$ docker-compose stop
+```
+
 
 ## 小结
 
@@ -138,8 +206,10 @@ Docker在快速应用分发、扩展等方面有很高的自动化能力，但�
 1. [Official Docs][docker0]
 2. [Docker with aufs and devicemapper][docker1]
 3. [LXC Tools][docker2]
+4. [Docker Compose][docker3]
 
 
 [docker0]:https://docs.docker.com "Official Docs"
 [docker1]:http://www.infoq.com/cn/articles/analysis-of-docker-file-system-aufs-and-devicemapper "Docker fs with aufs and devicemapper"
 [docker2]:http://www.ibm.com/developerworks/cn/linux/l-lxc-containers/ "LXC TOOL"
+[docker3]:https://docs.docker.com/compose "Docker Compose"
