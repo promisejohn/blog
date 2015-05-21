@@ -54,6 +54,96 @@ $ vim /etc/yum.repo.d/ambari.repo # 修改baseurl指向本地镜像
 
 安装之后，发现某几台服务器内存占用率非常高，可以通过Ambari增加Host节点，然后迁移部分的组件到新的机器。
 
+
+## 通过Docker部署集群
+可以自己做docker image，简单起见可以先用sequenceiq的image。
+
+单节点测试：
+
+```bash
+$ docker pull sequenceiq/hadoop-docker:2.7.0
+$ docker run -it sequenceiq/hadoop-docker:2.7.0 /etc/bootstrap.sh -bash
+$ cd $HADOOP_PREFIX # /usr/local/hadoop
+$ bin/hadoop jar share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.0.jar grep input output 'dfs[a-z.]+' # 统计key出现次数
+$ bin/hdfs dfs -cat output/* # 在用户Home下的output下
+```
+
+多节点部署，可以用ambari镜像，准备好blueprint.json：
+
+```
+{ "host_groups" : [
+    { "name" : "host_group_1",
+      "components" : [
+        { "name" : "ZOOKEEPER_SERVER" },
+        { "name" : "ZOOKEEPER_CLIENT" },
+        { "name" : "AMBARI_SERVER" },
+        { "name" : "HDFS_CLIENT" },
+        { "name" : "NODEMANAGER" },
+        { "name" : "MAPREDUCE2_CLIENT" },
+        { "name" : "APP_TIMELINE_SERVER" },
+        { "name" : "DATANODE" },
+        { "name" : "YARN_CLIENT" },
+        { "name" : "RESOURCEMANAGER" } ],
+      "cardinality" : "1" },
+    { "name" : "host_group_2",
+      "components" : [
+        { "name" : "ZOOKEEPER_SERVER" },
+        { "name" : "ZOOKEEPER_CLIENT" },
+        { "name" : "SECONDARY_NAMENODE" },
+        { "name" : "NODEMANAGER" },
+        { "name" : "YARN_CLIENT" },
+        { "name" : "DATANODE" }],
+      "cardinality" : "1" },
+    { "name" : "host_group_3",
+      "components" : [
+        { "name" : "ZOOKEEPER_SERVER" },
+        { "name" : "ZOOKEEPER_CLIENT" },
+        { "name" : "NAMENODE" },
+        { "name" : "NODEMANAGER" },
+        { "name" : "YARN_CLIENT" },
+        { "name" : "DATANODE" }],
+      "cardinality" : "1" } ],
+  "Blueprints" : {
+    "blueprint_name" : "blueprint-c1",
+    "stack_name" : "HDP",
+    "stack_version" : "2.2" } }
+```
+可以在ambari server上查找：`http://172.17.0.13:8080/api/v1/blueprints`。
+
+创建集群：
+
+```bash
+$ docker pull sequenceiq/ambari:1.7.0
+$ curl -Lo .amb https://github.com/sequenceiq/docker-ambari/raw/master/ambari-functions && . .amb
+$ amb-start-cluster 3 # 注意默认使用的是sequenceiq/ambari:1.7.0-warmup，可以修改 .amb
+$ amb-shell # 又启了个container
+ambshell > host list
+ambshell > blueprint add --url http://172.17.42.1/bp.json # 准备好json保存到某个能访问的http服务器
+ambshell > cluster build --blueprint blueprint-c1
+ambshell > cluster assign --hostGroup host_group_1 --host amb0.mycorp.kom
+ambshell > cluster assign --hostGroup host_group_2 --host amb1.mycorp.kom
+ambshell > cluster assign --hostGroup host_group_3 --host amb2.mycorp.kom
+ambshell > blueprint show --id blueprint-c1
+ambshell > cluster preview
+ambshell > cluster create
+```
+中间安装过程如果出现失败，可以到ambari-server上看详细情况，当然也可以直接向之前方式一样，通过GUI安装部署；或者开着浏览器看amb-shell执行过程。
+如果实在VM上远程使用，可以在docker所在机器上做NAT映射直接访问：
+
+```bash
+$ iptables -t nat -A PREROUTING -d 10.101.29.26 -p tcp --dport 8000 -j DNAT --to-destination 172.17.0.20:8080 # 可以用端口转发直接远程浏览器访问
+```
+
+做个简单的测试：
+
+```bash
+$ docker exec -it 9572938bb253 /bin/bash # 进入到容器内
+bash # su hdfs # 切换到HDFS的超级用户
+bash # hdfs dfsadmin -report
+bash # hdfs dfs -ls /
+```
+
+
 ## HDFS
 
 HDFS由NameNode、SNameNode和DataNode组成，HA的时候还有另一个NameNode（StandBy）。SNameNode专门从NameNode获取FSImage和Edits，为NameNode合并生成新的FSImage。
@@ -187,27 +277,65 @@ $ mvn package
 $ mvn exec:java -Dexec.mainClass="org.tecstack.App"
 ```
 
+## HUE交互界面
 
+Hue是一个基于Django开发的webapp，通过WebHDFS或HttpFS的一种访问HDFS的数据，在HDFS HA部署方式中只能使用HttpFS。
+如通过WebHDFS方式访问，需要修改`hdfs-site.xml`：
 
-## Zookeeper
+```xml
+<property>
+  <name>dfs.webhdfs.enabled</name>
+  <value>true</value>
+</property>
+```
+修改`core-site.xml`使Hue账号可以代理其他用户：
 
-## 尝试HBase
+```xml
+<property>
+  <name>hadoop.proxyuser.hue.hosts</name>
+  <value>*</value>
+</property>
+<property>
+  <name>hadoop.proxyuser.hue.groups</name>
+  <value>*</value>
+</property>
+```
+修改完参数需要重新启动HDFS，通过Ambari操作很方便。
 
-## 尝试Hive
+```bash
+$ yum install -y hue hue-server
+$ vim /etc/hue/conf/hue.ini # 修改各个服务的URI，可以通过Ambari看到服务所在的服务器位置；修改默认监听端口不与其它冲突
+$ service hue start
+```
 
-## 尝试Mahout
-如果是相对数据初步分析从而得出部分经验模型，更喜欢python的scikit系工具，pandas、scipy、numpy……
+默认登陆账号为`admin:admin`，可以通过hdfs为该账号创建一个专用的文件夹`/user/hue`进行测试，正式环境中可以考虑与其他身份系统对接。
 
-## Spark
+```bash
+$ su hdfs
+$ hdfs dfs -mkdir /user/hue
+$ hdfs dfs -chown -R admin:hadoop  /user/hue
+$ hdfs dfs -ls /user/
+```
 
-## Storm
 
 
 ## 参考
 
 1. [Ambari Official Docs][hadoop0]
 2. [HDFS Official Doc][hadoop1]
+3. [Hadoop-docker from sequenceiq][hadoop2]
+4. [Ambari Docs on Apache][hadoop3]
+5. [Sample BluePrint][hadoop4]
+6. [安装配置Hue][hadoop5]
+7. [手动安装HDP][hadoop6]
+8. [Ambari Blueprint][hadoop7]
 
 
 [hadoop0]:http://docs.hortonworks.com/HDPDocuments/Ambari-2.0.0.0/Ambari_Doc_Suite/ADS_v200.html "Ambari Official Docs"
 [hadoop1]:http://hadoop.apache.org/docs/stable2/hadoop-project-dist/hadoop-common/FileSystemShell.html "HDFS Official Doc"
+[hadoop2]:https://github.com/sequenceiq/hadoop-docker "hadoop-docker ffrom sequenceiq"
+[hadoop3]:https://cwiki.apache.org/confluence/display/AMBARI/Blueprints#Blueprints-Step1:CreateBlueprint "Ambari docs on apache"
+[hadoop4]:https://blog.codecentric.de/en/2014/05/lambda-cluster-provisioning/ "Sample Blueprint"
+[hadoop5]:http://ju.outofmemory.cn/entry/128881 "安装配置Hue"
+[hadoop6]:http://docs.hortonworks.com/HDPDocuments/HDP2/HDP-2.2.4/HDP_Man_Install_v224/index.html "手动安装HDP"
+[hadoop7]:https://cwiki.apache.org/confluence/display/AMBARI/Blueprints "Ambari Blueprint"
