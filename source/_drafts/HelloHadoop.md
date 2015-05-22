@@ -185,6 +185,7 @@ public class App
 ```bash
 $ mvn package
 $ mvn exec:java -Dexec.mainClass="org.tecstack.App"
+$ mvn dependency:copy-dependencies # 导出依赖的包
 ```
 
 
