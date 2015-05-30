@@ -318,6 +318,149 @@ $ hdfs dfs -chown -R admin:hadoop  /user/hue
 $ hdfs dfs -ls /user/
 ```
 
+## 导入数据到HBase
+
+通过hcat建立数据库表结构，通过pig导入数据。
+
+建立数据文件`data.tsv`:
+
+```
+row1    c1    c2
+row2    c1    c2
+row3    c1    c2
+row4    c1    c2
+row5    c1    c2
+row6    c1    c2
+row7    c1    c2
+row8    c1    c2
+row9    c1    c2
+row10    c1    c2
+```
+
+准备建表DDL，`simple.ddl`：
+
+```
+CREATE TABLE simple_hcat_load_table (id STRING, c1 STRING, c2 STRING)
+STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+WITH SERDEPROPERTIES ( 'hbase.columns.mapping' = 'd:c1,d:c2' )
+TBLPROPERTIES (
+'hbase.table.name' = 'simple_hcat_load_table'
+); 
+```
+
+准备导入脚本，`simple.bulkload.pig`：
+
+```
+A = LOAD 'hdfs:///tmp/data.tsv' USING PigStorage('\t') AS (id:chararray, c1:chararray, c2:chararray);
+-- DUMP A;
+STORE A INTO 'hbase://simple_hcat_load_table' USING org.apache.hive.hcatalog.pig.HCatStorer();
+```
+
+把文件放到HDFS，建表，导入：
+
+```bash
+$ su - hdfs
+$ hdfs dfs -put data.tsv /tmp/
+$ hcat -f simple.ddl
+$ pig -useHCatalog simple.bulkload.pig
+```
+
+通过Hue的HCat可以查看数据库和表数据，也可以通过HBase Shell：
+
+```bash
+$ su - hdfs
+$ hbase shell
+hbase > list # 查询所有表
+hbase > scan 'simple_hcat_load_table' # 查询所有数据
+hbase > describe 'simple_hcat_load_table'
+```
+
+也可以通过Hive Shell：
+
+```bash
+$ su - hdfs
+$ hive
+hive > show tables;
+hive > select count(*) from simple_hcat_load_table;
+hive > desc simple_hcat_load_table;
+```
+
+
+如果建表过程中出现类似`java.lang.NoClassDefFoundError: org/apache/hadoop/hbase/HBaseConfiguration`如下的找不到类情况，检查hcat的配置文件是否有HBase目录：`vim /usr/bin/hcat`。
+
+```bash
+...
+export HBASE_HOME=/usr/hdp/2.2.4.2-2/hbase
+...
+```
+此外，由于Hue集成的HCat调用的是Hive下的hcat，需要在`/etc/hive-hcatalog/conf/hcat-env.sh`中指定`HBASE_HOME`:
+
+```bash
+...
+HBASE_HOME=${HBASE_HOME:-/usr/hdp/current/hbase-client}
+...
+```
+
+pig在使用MapReduce模式执行时，可以根据log打开MR Job跟踪，如果也出现`java.lang.NoClassDefFoundError`类错误，说明mapreduce服务的classpath有缺漏，可以通过Ambari修改MapReduce服务`Advanced mapred-site`配置中的`mapreduce.application.classpath`，比如出现HBase相关类找不到，则添加HBase相关的库`/usr/hdp/2.2.4.2-2/hbase/lib/*`，然后重启MapReduce服务即可。
+
+
+如果出现执行权限错误，需要检查如下配置是否存在：
+`hive-site.xml`:
+
+```xml
+<property>
+  <name>hive.security.metastore.authorization.manager</name>
+  <value>org.apache.hadoop.hive.ql.security.authorization.StorageBasedAuthorizationProvider
+</value>
+</property>
+<property>
+  <name>hive.security.metastore.authenticator.manager</name>
+  <value>org.apache.hadoop.hive.ql.security.HadoopDefaultMetastoreAuthenticator
+</value>
+</property>
+<property>
+  <name>hive.metastore.pre.event.listeners</name>
+  <value>org.apache.hadoop.hive.ql.security.authorization.AuthorizationPreEventListener
+</value>
+</property>
+<property>
+  <name>hive.metastore.execute.setugi</name>
+  <value>true</value>
+</property>
+```
+
+`webhcat-site.xml`:
+正式环境中可以明确具体使用的账号名称，最小化权限。
+
+```xml
+<property>
+  <name>webhcat.proxyuser.hue.hosts</name>
+  <value>*</value>
+</property>
+<property>
+  <name>webhcat.proxyuser.hue.groups</name>
+  <value>*</value>
+</property>
+```
+
+`core-site.xml`:
+
+```xml
+<property>
+  <name>hadoop.proxyuser.hcat.group</name>
+  <value>*</value>
+</property>
+<property>
+  <name>hadoop.proxyuser.hcat.hosts</name>
+  <value>*</value>
+</property>
+```
+
+
+## 使用小结
+
+Hadoop系架构经过引入YARN，真正实现了数据和应用的分离，在YARN架构上可以实现出了原来的MapReduce之外的更多App，比如流式处理、实时处理、图计算等，如此可以真正实现“把应用挪到数据旁边高效执行”，构建大数据平台。此外，做数据分析时可以发现周边工具很丰富，比如hue统一的综合管理界面、从数据文件识别结构并管理数据的hcat、数据处理高级语言pig、支持SQL的Hive，使得在Hadoop平台上做数据分析非常方便（可以参考[这里][hadoop10]）。
+最后，数据处理优选python scikit-learn系工具，当大到一定程度，或需要多人同时工作时，hadoop系平台是个不错的选择。
 
 
 ## 参考
@@ -330,6 +473,7 @@ $ hdfs dfs -ls /user/
 6. [安装配置Hue][hadoop5]
 7. [手动安装HDP][hadoop6]
 8. [Ambari Blueprint][hadoop7]
+9. [导入数据到HBase][hadoop8]
 
 
 [hadoop0]:http://docs.hortonworks.com/HDPDocuments/Ambari-2.0.0.0/Ambari_Doc_Suite/ADS_v200.html "Ambari Official Docs"
@@ -340,3 +484,6 @@ $ hdfs dfs -ls /user/
 [hadoop5]:http://ju.outofmemory.cn/entry/128881 "安装配置Hue"
 [hadoop6]:http://docs.hortonworks.com/HDPDocuments/HDP2/HDP-2.2.4/HDP_Man_Install_v224/index.html "手动安装HDP"
 [hadoop7]:https://cwiki.apache.org/confluence/display/AMBARI/Blueprints "Ambari Blueprint"
+[hadoop8]:http://docs.hortonworks.com/HDPDocuments/HDP2/HDP-2.2.4/Importing_Data_HBase_v224/index.html "导入数据到HBase"
+[hadoop9]:https://cwiki.apache.org/confluence/display/Hive/WebHCat+InstallWebHCat "WebHCat部署"
+[hadoop10]:http://zh.hortonworks.com/hadoop-tutorial/hello-world-an-introduction-to-hadoop-hcatalog-hive-and-pig/ "hcat & hive & pig"
