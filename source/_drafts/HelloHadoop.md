@@ -207,7 +207,7 @@ $ export JAVA_HOME=/usr/jdk64/jdk1.7.0_67/
 $ export MAVEN_OPTS="-Xms256m -Xmx512m"
 $ mkdir ~/dev && cd $_
 $ mvn archetype:generate -DgroupId=org.tecstack -DartifactId=hellohdfs -DarchetypeArtifactId=maven-archetype-quickstart -DinteractiveMode=false
-$ cd hellohdfs
+$ cd hellohdfs && mvn package
 $ vim ./src/main/java/org/tecstack/App.java
 ```
 
@@ -258,7 +258,17 @@ public class App
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
-      <version>2.2.0</version>
+      <version>2.6.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-hdfs</artifactId>
+      <version>2.6.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-client</artifactId>
+      <version>2.6.0</version>
     </dependency>
     <dependency>
       <groupId>junit</groupId>
@@ -274,9 +284,41 @@ public class App
 
 ```bash
 $ mvn package
-$ mvn exec:java -Dexec.mainClass="org.tecstack.App"
+$ mkdir -p src/main/resources
+$ scp cloudlab119:/etc/hadoop/conf/core-site.xml src/main/resources
+$ mvn exec:java -Dexec.mainClass="org.tecstack.App" -Dexec.cleanupDaemonThreads=false
 $ mvn dependency:copy-dependencies # 导出依赖的包
+$ mvn resources:resources
+$ 
 ```
+
+关于maven的exec插件，也可以通过配置`pom.xml`的plugin的参数简化执行：
+
+```xml
+<build>
+  <plugins>
+    <plugin>
+      <groupId>org.codehaus.mojo</groupId>
+      <artifactId>exec-maven-plugin</artifactId>
+      <version>1.4.0</version>
+      <executions>
+        <execution>
+          <goals>
+             <goal>java</goal>
+          </goals>
+        </execution>
+      </executions>
+      <configuration>
+        <mainClass>org.tecstack.App</mainClass>
+        <cleanupDaemonThreads>false</cleanupDaemonThreads>
+      </configuration>
+   </plugin>
+ </plugins>
+</build>
+```
+
+之后运行只需要`mvn exec:java`，如果需要定制更多参数，比如JVM内存，单独启动进程执行等，可以使用`exec:exec`插件，具体看[codehaus官网][http://mojo.codehaus.org/exec-maven-plugin/usage.html]。
+
 
 ## HUE交互界面
 
