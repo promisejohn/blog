@@ -506,6 +506,7 @@ pig在使用MapReduce模式执行时，可以根据log打开MR Job跟踪，如�
 ## 使用小结
 
 Hadoop系架构经过引入YARN，真正实现了数据和应用的分离，在YARN架构上可以实现出了原来的MapReduce之外的更多App，比如流式处理、实时处理、图计算等，如此可以真正实现“把应用挪到数据旁边高效执行”，构建大数据平台。此外，做数据分析时可以发现周边工具很丰富，比如hue统一的综合管理界面、从数据文件识别结构并管理数据的hcat、数据处理高级语言pig、支持SQL的Hive，使得在Hadoop平台上做数据分析非常方便（可以参考[这里][hadoop10]）。
+另外，对比YARN利用OS进程隔离分配资源之外，[Mesos][hadoop11]结合了Container技术实现容器隔离分配资源，以此实现更通用的框架（用各种语言写的各种计算框架）。当然YARN也进入了[DCE][hadoop12]，通过docker实现容器隔离。不过正式应用还是有待Linux kernel本身功能的成熟，以及docker之类管理工具的完善。
 最后，数据处理优选python scikit-learn系工具，当大到一定程度，或需要多人同时工作时，hadoop系平台是个不错的选择。
 
 
@@ -520,6 +521,8 @@ Hadoop系架构经过引入YARN，真正实现了数据和应用的分离，在Y
 7. [手动安装HDP][hadoop6]
 8. [Ambari Blueprint][hadoop7]
 9. [导入数据到HBase][hadoop8]
+10. [Apache Mesos][hadoop11]
+11. [YARN DCE][hadoop12]
 
 
 [hadoop0]:http://docs.hortonworks.com/HDPDocuments/Ambari-2.0.0.0/Ambari_Doc_Suite/ADS_v200.html "Ambari Official Docs"
@@ -533,3 +536,5 @@ Hadoop系架构经过引入YARN，真正实现了数据和应用的分离，在Y
 [hadoop8]:http://docs.hortonworks.com/HDPDocuments/HDP2/HDP-2.2.4/Importing_Data_HBase_v224/index.html "导入数据到HBase"
 [hadoop9]:https://cwiki.apache.org/confluence/display/Hive/WebHCat+InstallWebHCat "WebHCat部署"
 [hadoop10]:http://zh.hortonworks.com/hadoop-tutorial/hello-world-an-introduction-to-hadoop-hcatalog-hive-and-pig/ "hcat & hive & pig"
+[hadoop11]:http://mesos.apache.org/ "Apache Mesos"
+[hadoop12]:http://hadoop.apache.org/docs/r2.7.0/hadoop-yarn/hadoop-yarn-site/DockerContainerExecutor.html "YARN DCE"
