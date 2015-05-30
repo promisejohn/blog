@@ -292,8 +292,8 @@ $ mkdir -p src/main/resources
 $ scp cloudlab119:/etc/hadoop/conf/core-site.xml src/main/resources
 $ mvn exec:java -Dexec.mainClass="org.tecstack.App" -Dexec.cleanupDaemonThreads=false
 $ mvn dependency:copy-dependencies # 导出依赖的包
-$ mvn resources:resources
-$ 
+$ mvn resources:resources # 导出资源
+$ mvn eclipse:eclipse # 生成eclipse工程文件，.project, .classpath
 ```
 
 关于maven的exec插件，也可以通过配置`pom.xml`的plugin的参数简化执行：
