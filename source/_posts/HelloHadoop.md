@@ -1,8 +1,12 @@
 ---
 title: "HelloHadoop"
-tags: []
-categories: []
+date: 2015-06-04 10:54:16
+tags: [hadoop,ambari,hdfs,hbase,hive]
+categories: [Tech]
 ---
+
+
+
 
 
 # Hadoop系列

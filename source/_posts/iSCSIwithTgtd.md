@@ -1,8 +1,12 @@
 ---
 title: "iSCSIwithTgtd"
-tags: [iscsi,tgtd,gfs]
+date: 2015-06-04 10:54:10
+tags: [iscsi,tgtd,linux]
 categories: [Tech]
 ---
+
+
+
 
 
 ## 安装部署
