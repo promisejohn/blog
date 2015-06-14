@@ -1,7 +1,7 @@
 ---
 title: "HelloHadoop"
-date: 2015-05-30 17:58:33
-tags: [hadoop,hdfs,java,ambari,hue]
+date: 2015-06-04 10:54:16
+tags: [hadoop,ambari,hdfs,hbase,hive]
 categories: [Tech]
 ---
 

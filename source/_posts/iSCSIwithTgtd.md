@@ -1,10 +1,9 @@
 ---
 title: 使用Linux的tgtd提供iscsi服务
 tags: [iscsi, tgtd, linux]
+date: 2015-06-04 10:54:10
 categories: [Tech]
-date: 2015-06-14 15:20:05
 ---
-
 
 
 ## 安装部署
