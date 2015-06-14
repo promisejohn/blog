@@ -1,5 +1,5 @@
 ---
-title: iSCSIwithTgtd
+title: 使用Linux的tgtd提供iscsi服务
 tags: [iscsi, tgtd, linux]
 categories: [Tech]
 date: 2015-06-14 15:20:05

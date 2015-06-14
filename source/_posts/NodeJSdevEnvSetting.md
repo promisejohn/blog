@@ -1,5 +1,5 @@
 ---
-title: HelloNodejs
+title: NodeJS开发环境配置
 tags: [nodejs, dev]
 categories: [Tech]
 date: 2015-06-13 15:09:27
@@ -16,6 +16,8 @@ nvm是nodejs的多版本管理利器，node是nodejs的解释器，npm是nodejs�
 # ubuntu安装之后会自动添加配置到~/.profile，可以直接cut到自己喜欢的比如~/.bashrc
 $ wget -qO- https://raw.githubusercontent.com/creationix/nvm/v0.25.4/install.sh | bash
 $ nvm install 0.12.4
+$ nvm use 0.12.4
+$ nvm alias default 0.12.4
 $ node --version
 ```
 由于网速问题，国内可以使用[taobao的npm镜像](https://npm.taobao.org/)：
@@ -55,7 +57,7 @@ $ grunt
 
 ## 编辑器：Atom
 
-使用chrome和nodejs开发的Atom，几个月前看还是离sublimetext挺远，现在看几乎快要完全超越！——**ubuntu下的中文算是个麻烦事，不用定以后还凑合**。
+使用chrome和nodejs开发的Atom，几个月前看还是离sublimetext挺远，现在看几乎快要完全超越！——**ubuntu下的中文算是个麻烦事，自定义以后还凑合**。
 
 * 安装可以直接从[官网](https://atom.io/)开始。
 * 开源字体从[文泉驿](http://wenq.org/)开始。
