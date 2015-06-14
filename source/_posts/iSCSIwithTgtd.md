@@ -1,8 +1,10 @@
 ---
-title: "iSCSIwithTgtd"
-tags: [iscsi,tgtd,gfs]
+title: iSCSIwithTgtd
+tags: [iscsi, tgtd, linux]
 categories: [Tech]
+date: 2015-06-14 15:20:05
 ---
+
 
 
 ## 安装部署
@@ -41,7 +43,7 @@ $ losetup -f /opt/tgtstorage/disk0.img # 映射为设备
 $ losetup -a # /dev/loop0
 $ tgtadm --lld iscsi --op new --mode logicalunit --tid 1 --lun 1 --backing-store /dev/loop0
 # 直接用块文件作为backstorage添加第二个块
-$ dd if=/dev/zero of=/opt/tgtstorage/disk1.img bs=1M count=5120 
+$ dd if=/dev/zero of=/opt/tgtstorage/disk1.img bs=1M count=5120
 $ tgtadm --lld iscsi --op new --mode logicalunit --tid 1 --lun 2 --backing-store /opt/tgtstorage/disk1.img
 # 绑定客户端ip
 $ tgtadm --lld iscsi --mode target --op bind --tid 1 --initiator-address=192.168.182.157
